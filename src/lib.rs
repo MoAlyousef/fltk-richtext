@@ -78,6 +78,45 @@ impl RichTextBuilder {
         self.sbuf.set_text("");
         self.data.lock().unwrap().clear();
     }
+    pub fn replace_first<T: Into<Option<Style>>>(&mut self, old: &str, new: &str, style: T) {
+        let mut buf = self.buf.text();
+        let mut sbuf = self.sbuf.text();
+        if let Some(find) = buf.find(old) {
+            if let Some(style) = style.into() {
+                let mut data = self.data.lock().unwrap();
+                let se = text::StyleTableEntryExt {
+                    color: style.color,
+                    font: style.font,
+                    size: style.size,
+                    attr: style.attr,
+                    bgcolor: style.bgcolor,
+                };
+                let idx = data.iter().position(|&i| i == se).unwrap_or((*data).len());
+                let range = find..find + old.len();
+                sbuf.replace_range(
+                    range.clone(),
+                    &((b'A' + idx as u8) as char).to_string().repeat(new.len()),
+                );
+                buf.replace_range(range, new);
+                if idx == (*data).len() {
+                    (*data).push(se);
+                }
+            } else {
+                let range = find..find + old.len();
+                sbuf.replace_range(range.clone(), &(b'A' as char).to_string().repeat(new.len()));
+                buf.replace_range(range, new);
+            }
+        }
+        self.buf.set_text(&buf);
+        self.sbuf.set_text(&sbuf);
+    }
+    pub fn replace_all<T: Into<Option<Style>> + Clone>(&mut self, old: &str, new: &str, style: T) {
+        let mut idx = 0;
+        while let Some(find) = &self.buf.text()[idx..].find(old) {
+            self.replace_first(old, new, style.clone());
+            idx = *find + 1;
+        }
+    }
 }
 
 pub trait RichTextDisplay {
